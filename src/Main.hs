@@ -18,6 +18,7 @@ main = do
     stream <- BL.getContents
     stream |> BL.unpack |> convertStream Reset (-1) |> parse args |> BL.pack |> BL.putStr
 
+parse [] = xxd 16
    
 parse [arg] = xxd cols
             where cols = (read arg) :: Int
@@ -45,12 +46,13 @@ xxd_full cols x = xxd_line line ++ xxd_full cols rest
         where (line, rest) = splitAt cols x
     
 xxd_line :: [(Int,(Word8,Colours))] -> [Word8]
-xxd_line [] = "\n" |> encode
+xxd_line [] = "\n" |> encode ++ (fromColour Reset)
 xxd_line l@((offset,(_,_)):_) =
-        ((AT.showHex0 8 (fromIntegral offset)  ++ ": ") |> encode) ++ hexy ++ [32,32] ++ texty ++ ("\n" |> encode)
+        ((AT.showHex0 8 (fromIntegral offset)  ++ ": ") |> encode) ++ hexy ++ [32,32] ++ texty ++ ("\n" |> encode) ++ (fromColour Reset)
         where   
-            hexy = l |> map (\(ofs,(ch,col)) -> evenSpace (fromIntegral ofs) ++ (toHex (fromIntegral ch))) |> concat
-            texty = l |> map (\(_,(ch,col)) -> ch) |> map printChar
+            hexy = l |> map (\(ofs,(ch,col)) -> evenSpace (fromIntegral ofs) ++ (fromColour col) ++(toHex (fromIntegral ch))) |> concat
+            -- texty = l |> map (\(_,(ch,col)) -> (fromColour col) ++ (printChar ch))
+            texty = l |> map (\(_,(ch,col)) -> (fromColour col) ++ [printChar ch]) |> concat
             printChar x
                 | 0x20 <= x && x < 0x80 = x
                 | otherwise = ord '~' |> fromIntegral
@@ -60,17 +62,5 @@ xxd_line l@((offset,(_,_)):_) =
                     | otherwise = []
             
 
-
-
-
-
-
--- xxd _ _ _ _ [] = []
--- xxd i todo cols colour x 
-    -- | todo > cols = encode ((AT.showHex0 8 i) ++ ": ") ++ xxd i (todo - 1) cols colour x
--- xxd i 0 cols colour x = encode ("\n") ++ xxd i (cols + 1) cols colour x
--- xxd i todo cols colour (x:xs) = encode (AT.showHex0 2 (fromIntegral x)) ++ xxd (i+1) (todo - 1) cols colour xs
-
-
-
-
+fromColour Reset = [27,0x5b,0x30,0x6d]
+fromColour (Colour col) = [27,0x5b,0x31,0x3b,0x33,col,0x6d]
