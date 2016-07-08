@@ -37,8 +37,7 @@ convertStream colour count (x:xs) =
             (x, colour) : convertStream colour (count -1) xs
         
 xxd :: Int ->[(Word8, Colours)] -> [Word8]
-xxd cols x = --((show cols ) ++ "   "++ (x |> length |> show))|> encode
-         ( x |> zip [0..] |> xxd_full cols) 
+xxd cols x = ( x |> zip [0..] |> xxd_full cols) 
 
 xxd_full :: Int -> [(Int,(Word8,Colours))] -> [Word8]
 xxd_full _ [] = []
@@ -51,7 +50,6 @@ xxd_line l@((offset,(_,_)):_) =
         ((AT.showHex0 8 (fromIntegral offset)  ++ ": ") |> encode) ++ hexy ++ [32,32] ++ texty ++ ("\n" |> encode) ++ (fromColour Reset)
         where   
             hexy = l |> map (\(ofs,(ch,col)) -> evenSpace (fromIntegral ofs) ++ (fromColour col) ++(toHex (fromIntegral ch))) |> concat
-            -- texty = l |> map (\(_,(ch,col)) -> (fromColour col) ++ (printChar ch))
             texty = l |> map (\(_,(ch,col)) -> (fromColour col) ++ [printChar ch]) |> concat
             printChar x
                 | 0x20 <= x && x < 0x80 = x
