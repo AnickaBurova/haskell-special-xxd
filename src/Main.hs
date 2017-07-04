@@ -7,58 +7,71 @@ import Data.Char
 import Numeric
 import Codec.Binary.UTF8.String
 import Data.List
-import Anca.Pipe
-import qualified Anca.Text as AT
+import qualified Numeric as N
 
 
+showHexAligned :: (Integral a,Show a) => Char -> Int -> a -> String
+showHexAligned fill width value = reverse.take width.reverse $ replicate width fill ++ N.showHex value ""
+
+showHex0 = showHexAligned '0'
+
+
+readHexStr :: (Integral a) => String -> [a]
+readHexStr [] = []
+readHexStr (t:xs)
+        | isSpace t = readHexStr xs
+readHexStr (x:y:xs) = fst (head (N.readHex [x,y])) : readHexStr xs
 
 main :: IO ()
 main = do
     args <- getArgs
     stream <- BL.getContents
-    stream |> BL.unpack |> convertStream Reset (-1) |> parse args |> BL.pack |> BL.putStr
+    BL.putStr.BL.pack.parse args.convertStream Reset (-1) $ BL.unpack stream
 
 parse [] = xxd 16
-   
+
 parse [arg] = xxd cols
-            where cols = (read arg) :: Int
+            where cols = read arg :: Int
 
 data Colours =  Colour Word8
                 | Reset
- 
+
 
 convertStream :: Colours -> Int -> [Word8] -> [(Word8, Colours)]
 convertStream _ _ [] = []
 convertStream _ _ (255:1:254:127:count:colour:xs) =
             convertStream (Colour colour) (fromIntegral count) xs
 convertStream _ 0 (x:xs) =
-            (x, Reset) : convertStream (Reset) (-1) xs
+            (x, Reset) : convertStream Reset (-1) xs
 convertStream colour count (x:xs) =
             (x, colour) : convertStream colour (count -1) xs
-        
-xxd :: Int ->[(Word8, Colours)] -> [Word8]
-xxd cols x = ( x |> zip [0..] |> xxd_full cols) 
 
-xxd_full :: Int -> [(Int,(Word8,Colours))] -> [Word8]
-xxd_full _ [] = []
-xxd_full cols x = xxd_line line ++ xxd_full cols rest
+xxd :: Int ->[(Word8, Colours)] -> [Word8]
+xxd cols x = xxdFull cols $ zip [0..] x
+
+xxdFull :: Int -> [(Int,(Word8,Colours))] -> [Word8]
+xxdFull _ [] = []
+xxdFull cols x = xxdLine line ++ xxdFull cols rest
         where (line, rest) = splitAt cols x
-    
-xxd_line :: [(Int,(Word8,Colours))] -> [Word8]
-xxd_line [] = "\n" |> encode ++ (fromColour Reset)
-xxd_line l@((offset,(_,_)):_) =
-        ((AT.showHex0 8 (fromIntegral offset)  ++ ": ") |> encode) ++ hexy ++ [32,32] ++ texty ++ ("\n" |> encode) ++ (fromColour Reset)
-        where   
-            hexy = l |> map (\(ofs,(ch,col)) -> evenSpace (fromIntegral ofs) ++ (fromColour col) ++(toHex (fromIntegral ch))) |> concat
-            texty = l |> map (\(_,(ch,col)) -> (fromColour col) ++ [printChar ch]) |> concat
+
+xxdLine :: [(Int,(Word8,Colours))] -> [Word8]
+xxdLine [] = fromColour Reset ++ endLine
+xxdLine l@((offset,(_,_)):_) =
+        index_text ++ encode ": " ++ hexy ++ texty ++ ending
+        where
+            ending = endLine ++ fromColour Reset
+            index_text = encode $ showHex0 8 (fromIntegral offset)
+            hexy = concatMap (\(ofs, (ch, col)) -> evenSpace (fromIntegral ofs) ++ fromColour col ++ toHex (fromIntegral ch)) l ++ encode "  "
+            texty = concatMap (\(_, (ch, col)) -> fromColour col ++ [printChar ch]) l
             printChar x
                 | 0x20 <= x && x < 0x80 = x
-                | otherwise = ord '~' |> fromIntegral
-            toHex = encode.AT.showHex0 2
-            evenSpace i 
+                | otherwise = fromIntegral $ ord '~'
+            toHex = encode.showHex0 2
+            evenSpace i
                     | i `mod` 2 == 0 = [32]
                     | otherwise = []
-            
 
+
+endLine = encode "\n"
 fromColour Reset = [27,0x5b,0x30,0x6d]
 fromColour (Colour col) = [27,0x5b,0x31,0x3b,0x33,col,0x6d]
